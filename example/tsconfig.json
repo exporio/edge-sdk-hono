@@ -1,0 +1,6 @@
+{
+    "compilerOptions": {
+        "lib": ["ES2020", "esnext"],
+        "types": ["@cloudflare/workers-types"]
+    }
+}

@@ -1,0 +1,30 @@
+{
+    "name": "@exporio/edge-sdk-hono",
+    "version": "0.0.0",
+    "description": "Exporio Edge SDK middleware for Hono framework",
+    "license": "MIT",
+    "main": "dist/index.js",
+    "types": "dist",
+    "publishConfig": {
+        "access": "public"
+    },
+    "scripts": {
+        "build": "tsc",
+        "test": "vitest",
+        "release": "release-it",
+        "format": "prettier --write ."
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/exporio/edge-sdk-hono/"
+    },
+    "devDependencies": {
+        "@cloudflare/workers-types": "^4.20230518.0",
+        "hono": "^3.2.0",
+        "prettier": "^2.8.4",
+        "release-it": "^15.11.0",
+        "typescript": "^4.9.5",
+        "vitest": "^0.31.4",
+        "vitest-environment-miniflare": "^2.14.0"
+    }
+}

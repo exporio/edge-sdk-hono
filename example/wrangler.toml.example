@@ -1,0 +1,7 @@
+account_id = "..."
+name = "exporio-example-worker-hono"
+
+compatibility_date = "2022-11-12"
+main = "./src/index.ts"
+
+route = "https://your_domain.com/*"
