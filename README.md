@@ -92,7 +92,7 @@ Key points to note:
 
 -   Replace `EXPORIO_API_KEY` with your API Key from the Exporio UI (Website Settings > API Keys).
 -   The Exporio middleware will set a new contentUrl to fetch from in the case of a Split URL test, otherwise, the current request URL will be returned. Retrieve it with `c.get('contentUrl')`.
--   A new Response must always be returned at the end to allow the middlewares to modify the response - `return new Response(response.body, response)`.
+-   A new Response must always be returned at the end to allow the middleware to modify the response - `return new Response(response.body, response)`.
 
 **4.** Configure your `wrangler.toml`:
 

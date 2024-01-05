@@ -1,6 +1,6 @@
 import { Context, MiddlewareHandler } from 'hono'
 
-import { Instructions, ExporioMiddlewareOptions, RequestJson } from './types'
+import { Instructions, ExporioMiddlewareOptions, RequestJson, Cookie } from './types'
 import {
     After,
     Append,
@@ -42,22 +42,6 @@ export const exporioMiddleware = (options: ExporioMiddlewareOptions): Middleware
     }
 }
 
-const buildRequestJson = (c: Context, apiKey: string): RequestJson => {
-    const headersInit: HeadersInit = []
-    c.req.headers.forEach((value: string, key: string) => headersInit.push([key, value]))
-
-    return {
-        originalRequest: {
-            url: c.req.url,
-            method: c.req.method,
-            headersInit: headersInit,
-        },
-        params: {
-            API_KEY: apiKey,
-        },
-    }
-}
-
 const fetchExporioInstructions = async (
     c: Context,
     options: ExporioMiddlewareOptions
@@ -78,6 +62,22 @@ const fetchExporioInstructions = async (
     }
 }
 
+const buildRequestJson = (c: Context, apiKey: string): RequestJson => {
+    const headersInit: HeadersInit = []
+    c.req.headers.forEach((value: string, key: string) => headersInit.push([key, value]))
+
+    return {
+        originalRequest: {
+            url: c.req.url,
+            method: c.req.method,
+            headersInit: headersInit,
+        },
+        params: {
+            API_KEY: apiKey,
+        },
+    }
+}
+
 const getContentUrl = (instructions: Instructions, defaultUrl: string): string => {
     const customUrlInstruction = instructions?.customUrlInstruction
     return customUrlInstruction?.loadCustomUrl && customUrlInstruction?.customUrl
@@ -86,118 +86,89 @@ const getContentUrl = (instructions: Instructions, defaultUrl: string): string =
 }
 
 const applyRewriterInstruction = (c: Context, instructions: Instructions) => {
-    let response = new Response(c.res.body, c.res)
+    try {
+        let response = new Response(c.res.body, c.res)
 
-    instructions?.rewriterInstruction?.transformations?.forEach(({ selector, argument1, argument2, method }) => {
-        switch (method) {
-            // Default Methods
-            case 'After': {
-                const rewriter = new HTMLRewriter().on(selector, new After(argument1, argument2))
-                response = rewriter.transform(response)
-                break
-            }
+        instructions?.rewriterInstruction?.transformations?.forEach(({ selector, argument1, argument2, method }) => {
+            const rewriter = new HTMLRewriter().on(selector, getRewriterClass(method, argument1, argument2))
+            response = rewriter.transform(response)
+        })
 
-            case 'Append': {
-                const rewriter = new HTMLRewriter().on(selector, new Append(argument1, argument2))
-                response = rewriter.transform(response)
-                break
-            }
+        c.res = new Response(response.body, response)
+    } catch (err) {
+        console.error('Failed to apply exporio rewriter instruction', err)
+    }
+}
 
-            case 'Before': {
-                const rewriter = new HTMLRewriter().on(selector, new Before(argument1, argument2))
-                response = rewriter.transform(response)
-                break
-            }
-
-            case 'Prepend': {
-                const rewriter = new HTMLRewriter().on(selector, new Prepend(argument1, argument2))
-                response = rewriter.transform(response)
-                break
-            }
-
-            case 'Remove': {
-                const rewriter = new HTMLRewriter().on(selector, new Remove())
-                response = rewriter.transform(response)
-                break
-            }
-
-            case 'RemoveAndKeepContent': {
-                const rewriter = new HTMLRewriter().on(selector, new RemoveAndKeepContent())
-                response = rewriter.transform(response)
-                break
-            }
-
-            case 'RemoveAttribute': {
-                const rewriter = new HTMLRewriter().on(selector, new RemoveAttribute(argument1))
-                response = rewriter.transform(response)
-                break
-            }
-
-            case 'Replace': {
-                const rewriter = new HTMLRewriter().on(selector, new Replace(argument1, argument2))
-                response = rewriter.transform(response)
-                break
-            }
-
-            case 'SetAttribute': {
-                const rewriter = new HTMLRewriter().on(selector, new SetAttribute(argument1, argument2))
-                response = rewriter.transform(response)
-                break
-            }
-
-            case 'SetInnerContent': {
-                const rewriter = new HTMLRewriter().on(selector, new SetInnerContent(argument1, argument2))
-                response = rewriter.transform(response)
-                break
-            }
-
-            // Custom Methods
-            case 'AppendGlobalCode': {
-                const rewriter = new HTMLRewriter().on(selector, new AppendGlobalCode(argument1, argument2))
-                response = rewriter.transform(response)
-                break
-            }
-
-            case 'SetStyleProperty': {
-                const rewriter = new HTMLRewriter().on(selector, new SetStyleProperty(argument1, argument2))
-                response = rewriter.transform(response)
-                break
-            }
-        }
-    })
-
-    c.res = new Response(response.body, response)
+function getRewriterClass(method: string, arg1: any, arg2: any) {
+    switch (method) {
+        case 'After':
+            return new After(arg1, arg2)
+        case 'Append':
+            return new Append(arg1, arg2)
+        case 'Before':
+            return new Before(arg1, arg2)
+        case 'Prepend':
+            return new Prepend(arg1, arg2)
+        case 'Remove':
+            return new Remove()
+        case 'RemoveAndKeepContent':
+            return new RemoveAndKeepContent()
+        case 'RemoveAttribute':
+            return new RemoveAttribute(arg1)
+        case 'Replace':
+            return new Replace(arg1, arg2)
+        case 'SetAttribute':
+            return new SetAttribute(arg1, arg2)
+        case 'SetInnerContent':
+            return new SetInnerContent(arg1, arg2)
+        case 'AppendGlobalCode':
+            return new AppendGlobalCode(arg1, arg2)
+        case 'SetStyleProperty':
+            return new SetStyleProperty(arg1, arg2)
+        default:
+            throw new Error(`Unknown method: ${method}`)
+    }
 }
 
 const applyCookieInstruction = (headers: Headers, instructions: Instructions) => {
-    instructions?.cookieInstruction?.cookies.forEach((cookie) => {
-        let cookieAttributes = [`${cookie.name}=${cookie.value}`]
+    try {
+        instructions?.cookieInstruction?.cookies.forEach((cookie) => {
+            const cookieString = getCookieString(cookie)
+            headers.append('Set-Cookie', cookieString)
+        })
+    } catch (err) {
+        console.error('Failed to set exporio cookies', err)
+    }
+}
 
-        if (cookie.domain) {
-            cookieAttributes.push(`Domain=${cookie.domain}`)
-        }
-        if (cookie.path) {
-            cookieAttributes.push(`Path=${cookie.path}`)
-        }
-        if (cookie.expires) {
-            cookieAttributes.push(`Expires=${cookie.expires}`)
-        }
-        if (cookie.maxAge) {
-            cookieAttributes.push(`Max-Age=${cookie.maxAge}`)
-        }
-        if (cookie.httpOnly) {
-            cookieAttributes.push('HttpOnly')
-        }
-        if (cookie.secure) {
-            cookieAttributes.push('Secure')
-        }
-        if (cookie.sameSite) {
-            cookieAttributes.push(`SameSite=${cookie.sameSite}`)
-        }
-        if (cookie.partitioned) {
-            cookieAttributes.push('Partitioned')
-        }
+const getCookieString = (cookie: Cookie): string => {
+    let cookieAttributes = [`${cookie.name}=${cookie.value}`]
 
-        headers.append('Set-Cookie', cookieAttributes.join('; '))
-    })
+    if (cookie.domain) {
+        cookieAttributes.push(`Domain=${cookie.domain}`)
+    }
+    if (cookie.path) {
+        cookieAttributes.push(`Path=${cookie.path}`)
+    }
+    if (cookie.expires) {
+        cookieAttributes.push(`Expires=${cookie.expires}`)
+    }
+    if (cookie.maxAge) {
+        cookieAttributes.push(`Max-Age=${cookie.maxAge}`)
+    }
+    if (cookie.httpOnly) {
+        cookieAttributes.push('HttpOnly')
+    }
+    if (cookie.secure) {
+        cookieAttributes.push('Secure')
+    }
+    if (cookie.sameSite) {
+        cookieAttributes.push(`SameSite=${cookie.sameSite}`)
+    }
+    if (cookie.partitioned) {
+        cookieAttributes.push('Partitioned')
+    }
+
+    return cookieAttributes.join('; ')
 }
